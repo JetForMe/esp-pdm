@@ -8,8 +8,10 @@
 
 
 
-PDMIn::PDMIn()
+PDMIn::PDMIn(gpio_num_t inClockPin, gpio_num_t inDataPin)
 	:
+	mClockPin(inClockPin),
+	mDataPin(inDataPin),
 	mChannel(NULL),
 	mBitDepth(I2S_DATA_BIT_WIDTH_16BIT),
 	mBuffer(NULL)
@@ -18,19 +20,18 @@ PDMIn::PDMIn()
 
 
 bool
-PDMIn::start(gpio_num_t inClkPin, gpio_num_t inDataPin, uint32_t inSampleRate, i2s_data_bit_width_t inBitDepth, size_t inBufferSize)
+PDMIn::start(uint32_t inSampleRate, i2s_data_bit_width_t inBitDepth, bool inMono, size_t inBufferSize)
 {
 	mBitDepth = inBitDepth;
 	mBuffer = ::xRingbufferCreate(inBufferSize * (inBitDepth / 8), RINGBUF_TYPE_BYTEBUF);
 
-	//	Create the channel…
+	//	Create the channel and set the DMA buffer as large as it can be…
 
-	bool mono = true;
-	i2s_slot_mode_t slotMode = mono ? I2S_SLOT_MODE_MONO : I2S_SLOT_MODE_STEREO;
-	
+	i2s_slot_mode_t slotMode = inMono ? I2S_SLOT_MODE_MONO : I2S_SLOT_MODE_STEREO;
     i2s_chan_config_t chanConfig = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
 	chanConfig.dma_frame_num = 4092 / (slotMode * inBitDepth / 8);
-	esp_err_t err = i2s_new_channel(&chanConfig, NULL, &mChannel);
+	
+	esp_err_t err = ::i2s_new_channel(&chanConfig, NULL, &mChannel);
 	if (err != ESP_OK)
 	{
 		Serial.printf("i2s_new_channel() failed with %d\n", err);
@@ -39,13 +40,14 @@ PDMIn::start(gpio_num_t inClkPin, gpio_num_t inDataPin, uint32_t inSampleRate, i
 
 	//	Configure it…
 
-    i2s_pdm_rx_config_t config = {
+    i2s_pdm_rx_config_t config =
+    {
         .clk_cfg = I2S_PDM_RX_CLK_DEFAULT_CONFIG(inSampleRate),
         .slot_cfg = I2S_PDM_RX_SLOT_DEFAULT_CONFIG(inBitDepth, slotMode),
         .gpio_cfg =
         {
-            .clk = inClkPin,
-            .din = inDataPin,
+            .clk = mClockPin,
+            .din = mDataPin,
             .invert_flags =
             {
                 .clk_inv = false,
@@ -53,7 +55,7 @@ PDMIn::start(gpio_num_t inClkPin, gpio_num_t inDataPin, uint32_t inSampleRate, i
         },
     };
 
-    err = i2s_channel_init_pdm_rx_mode(mChannel, &config);
+    err = ::i2s_channel_init_pdm_rx_mode(mChannel, &config);
 	if (err != ESP_OK)
 	{
 		Serial.printf("i2s_channel_init_pdm_rx_mode() failed with %d\n", err);
@@ -70,7 +72,7 @@ PDMIn::start(gpio_num_t inClkPin, gpio_num_t inDataPin, uint32_t inSampleRate, i
 		.on_send_q_ovf = NULL,
 	};
 	
-	err = i2s_channel_register_event_callback(mChannel, &cbs, this);
+	err = ::i2s_channel_register_event_callback(mChannel, &cbs, this);
 	if (err != ESP_OK)
 	{
 		Serial.printf("i2s_channel_register_event_callback failed with %d\n", err);
@@ -79,7 +81,7 @@ PDMIn::start(gpio_num_t inClkPin, gpio_num_t inDataPin, uint32_t inSampleRate, i
 
 	//	Enable the channel (this starts DMA)…
 
-	err = i2s_channel_enable(mChannel);
+	err = ::i2s_channel_enable(mChannel);
 	if (err != ESP_OK)
 	{
 		Serial.printf("i2s_channel_enable() failed with %d\n", err);
@@ -87,6 +89,13 @@ PDMIn::start(gpio_num_t inClkPin, gpio_num_t inDataPin, uint32_t inSampleRate, i
 	}
 
 	return true;
+}
+
+void
+PDMIn::stop()
+{
+	::i2s_channel_disable(i2s_del_channel);
+	::i2s_del_channel(mChannel);
 }
 
 bool
