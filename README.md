@@ -7,6 +7,8 @@ A simple asynchronous PDM input library for ESP microcontrollers.
 # Usage
 
 ```c++
+#include <ArduinoESPPDM.h>
+
 PDMIn				gPDMIn(GPIO_NUM_10, GPIO_NUM_11);
 
 
