@@ -1,4 +1,4 @@
-# Arduino ESP PDM
+# ESP PDM for Arduino
 
 **NOTE:** *This library is not yet ready for use.*
 
