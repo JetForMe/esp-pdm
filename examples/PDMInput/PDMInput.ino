@@ -3,7 +3,7 @@
 #include "PDMIn.h"
 
 
-PDMIn				gPDMIn;
+PDMIn				gPDMIn(GPIO_NUM_10, GPIO_NUM_11);
 
 
 void
@@ -33,7 +33,7 @@ setup()
 	//	for 10 seconds of data. The clock and data pins correspond to
 	//	the A3 and A4 pins on the Matrix Portal S3…
 	
-	bool success = gPDMIn.start(GPIO_NUM_10, GPIO_NUM_11, 16 * 1000, I2S_DATA_BIT_WIDTH_16BIT, 10 * 16 * 1000);
+	bool success = gPDMIn.start(16 * 1000, I2S_DATA_BIT_WIDTH_16BIT, 10 * 16 * 1000);
 	if (!success)
 	{
 		Serial.println("PDM init failed");
@@ -52,7 +52,7 @@ loop()
 		//	Wait up to 1000 ms for the buffer to fill and get some data…
 		
 		size_t samplesRead = 0;
-		void* bytes = gPDMIn.getSamples(&samplesRead, kSampleCount, pdMS_TO_TICKS(1000));
+		void* bytes = gPDMIn.getSamples(samplesRead, kSampleCount, pdMS_TO_TICKS(1000));
 		
 		const int16_t* data = static_cast<const int16_t*>(bytes);
 		for (int i = 0; i < samplesRead; i++)
