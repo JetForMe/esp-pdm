@@ -46,23 +46,6 @@ PDMIn::start(uint32_t inSampleRate, i2s_data_bit_width_t inBitDepth, bool inMono
 		return false;
 	}
 
-	//	Set up the input buffer overflow callback…
-
-	i2s_event_callbacks_t cbs =
-	{
-		.on_recv = NULL,
-		.on_recv_q_ovf = rxQueueOverflowCallback,
-		.on_sent = NULL,
-		.on_send_q_ovf = NULL,
-	};
-	
-	err = ::i2s_channel_register_event_callback(mChannel, &cbs, this);
-	if (err != ESP_OK)
-	{
-		std::printf("i2s_channel_register_event_callback failed with %d: %s\n", err, esp_err_to_name(err));
-		return false;
-	}
-
 	//	Configure it…
 
     i2s_pdm_rx_config_t config =
@@ -84,6 +67,23 @@ PDMIn::start(uint32_t inSampleRate, i2s_data_bit_width_t inBitDepth, bool inMono
 	if (err != ESP_OK)
 	{
 		std::printf("i2s_channel_init_pdm_rx_mode() failed with %d: %s\n", err, esp_err_to_name(err));
+		return false;
+	}
+
+	//	Set up the input buffer overflow callback…
+
+	i2s_event_callbacks_t cbs =
+	{
+		.on_recv = NULL,
+		.on_recv_q_ovf = rxQueueOverflowCallback,
+		.on_sent = NULL,
+		.on_send_q_ovf = NULL,
+	};
+	
+	err = ::i2s_channel_register_event_callback(mChannel, &cbs, this);
+	if (err != ESP_OK)
+	{
+		std::printf("i2s_channel_register_event_callback failed with %d: %s\n", err, esp_err_to_name(err));
 		return false;
 	}
 
