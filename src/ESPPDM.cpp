@@ -1,5 +1,7 @@
 #include "ESPPDM.h"
 
+#include <cstdio>
+
 #include <driver/i2s_pdm.h>
 #include <esp_attr.h>
 #include <freertos/ringbuf.h>
@@ -12,19 +14,25 @@ PDMIn::PDMIn(gpio_num_t inClockPin, gpio_num_t inDataPin)
 	:
 	mClockPin(inClockPin),
 	mDataPin(inDataPin),
-	mChannel(NULL),
+	mChannel(nullptr),
 	mBitDepth(I2S_DATA_BIT_WIDTH_16BIT),
-	mBuffer(NULL)
+	mBuffer(nullptr)
 {
 }
 
 
 bool
+IRAM_ATTR
 PDMIn::start(uint32_t inSampleRate, i2s_data_bit_width_t inBitDepth, bool inMono, size_t inBufferSize)
 {
 	mBitDepth = inBitDepth;
 	mBuffer = ::xRingbufferCreate(inBufferSize * (inBitDepth / 8), RINGBUF_TYPE_BYTEBUF);
-
+	if (mBuffer == nullptr)
+	{
+		std::printf("Unable to create ring buffer\n");
+		return false;
+	}
+	
 	//	Create the channel and set the DMA buffer as large as it can be…
 
 	i2s_slot_mode_t slotMode = inMono ? I2S_SLOT_MODE_MONO : I2S_SLOT_MODE_STEREO;
@@ -34,7 +42,24 @@ PDMIn::start(uint32_t inSampleRate, i2s_data_bit_width_t inBitDepth, bool inMono
 	esp_err_t err = ::i2s_new_channel(&chanConfig, NULL, &mChannel);
 	if (err != ESP_OK)
 	{
-		Serial.printf("i2s_new_channel() failed with %d\n", err);
+		std::printf("i2s_new_channel() failed with %d: %s\n", err, esp_err_to_name(err));
+		return false;
+	}
+
+	//	Set up the input buffer overflow callback…
+
+	i2s_event_callbacks_t cbs =
+	{
+		.on_recv = NULL,
+		.on_recv_q_ovf = rxQueueOverflowCallback,
+		.on_sent = NULL,
+		.on_send_q_ovf = NULL,
+	};
+	
+	err = ::i2s_channel_register_event_callback(mChannel, &cbs, this);
+	if (err != ESP_OK)
+	{
+		std::printf("i2s_channel_register_event_callback failed with %d: %s\n", err, esp_err_to_name(err));
 		return false;
 	}
 
@@ -58,24 +83,7 @@ PDMIn::start(uint32_t inSampleRate, i2s_data_bit_width_t inBitDepth, bool inMono
     err = ::i2s_channel_init_pdm_rx_mode(mChannel, &config);
 	if (err != ESP_OK)
 	{
-		Serial.printf("i2s_channel_init_pdm_rx_mode() failed with %d\n", err);
-		return false;
-	}
-
-	//	Set up the input buffer overflow callback…
-
-	i2s_event_callbacks_t cbs =
-	{
-		.on_recv = NULL,
-		.on_recv_q_ovf = rxQueueOverflowCallback,
-		.on_sent = NULL,
-		.on_send_q_ovf = NULL,
-	};
-	
-	err = ::i2s_channel_register_event_callback(mChannel, &cbs, this);
-	if (err != ESP_OK)
-	{
-		Serial.printf("i2s_channel_register_event_callback failed with %d\n", err);
+		std::printf("i2s_channel_init_pdm_rx_mode() failed with %d: %s\n", err, esp_err_to_name(err));
 		return false;
 	}
 
@@ -84,7 +92,7 @@ PDMIn::start(uint32_t inSampleRate, i2s_data_bit_width_t inBitDepth, bool inMono
 	err = ::i2s_channel_enable(mChannel);
 	if (err != ESP_OK)
 	{
-		Serial.printf("i2s_channel_enable() failed with %d\n", err);
+		std::printf("i2s_channel_enable() failed with %d: %s\n", err, esp_err_to_name(err));
 		return false;
 	}
 
@@ -99,9 +107,10 @@ PDMIn::stop()
 }
 
 bool
+IRAM_ATTR
 PDMIn::callback(i2s_event_data_t* inEvent)
 {
-// 	Serial.println("Audio callback");
+	std::printf("Audio callback\n");
 	const uint8_t* buffer = static_cast<const uint8_t*>(inEvent->dma_buf);
 	(void) ::xRingbufferSendFromISR(mBuffer, buffer, inEvent->size, NULL);
 
@@ -109,6 +118,7 @@ PDMIn::callback(i2s_event_data_t* inEvent)
 }
 
 bool
+IRAM_ATTR
 PDMIn::rxQueueOverflowCallback(i2s_chan_handle_t inChannel, i2s_event_data_t* inEvent, void* inCtx)
 {
 	PDMIn* self = reinterpret_cast<PDMIn*>(inCtx);
@@ -150,6 +160,9 @@ PDMIn::getSamples(size_t& outCount, size_t inMaxCount, uint32_t inTimeout)
 void
 PDMIn::deleteBytes(void* inBytes)
 {
-	::vRingbufferReturnItem(mBuffer, inBytes);
+	if (inBytes != NULL)
+	{
+		::vRingbufferReturnItem(mBuffer, inBytes);
+	}
 }
 
