@@ -43,12 +43,17 @@ public:
 					*/
 					
 	void			deleteBytes(void* inBytes);
+
+
+	void* operator new(size_t size);
+	
+	void operator delete(void* ptr);
 	
 protected:
 	virtual bool	callback(i2s_event_data_t* inEvent);
 	
 private:
-	static	bool  IRAM_ATTR rxQueueOverflowCallback(i2s_chan_handle_t inChannel, i2s_event_data_t* inEvent, void* inCtx);
+	static	bool   rxQueueOverflowCallback(i2s_chan_handle_t inChannel, i2s_event_data_t* inEvent, void* inCtx);
 
 
 public:

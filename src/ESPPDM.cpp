@@ -10,6 +10,26 @@
 
 
 
+
+#if false
+  void* PDMIn::operator new(size_t size) {
+    // Request memory that is internal and accessible as 8-bit
+      std::printf("Allocating new PDMIn\n");
+    void* ptr = heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    if (!ptr) {
+      // Optionally handle allocation failure
+      std::printf("Allocation failed in internal RAM\n");
+    }
+    return ptr;
+  }
+
+  // Override operator delete accordingly
+  void PDMIn::operator delete(void* ptr) {
+    heap_caps_free(ptr);
+  }
+#endif
+
+
 PDMIn::PDMIn(gpio_num_t inClockPin, gpio_num_t inDataPin)
 	:
 	mClockPin(inClockPin),
@@ -22,22 +42,15 @@ PDMIn::PDMIn(gpio_num_t inClockPin, gpio_num_t inDataPin)
 
 
 bool
-IRAM_ATTR
 PDMIn::start(uint32_t inSampleRate, i2s_data_bit_width_t inBitDepth, bool inMono, size_t inBufferSize)
 {
 	mBitDepth = inBitDepth;
-	mBuffer = ::xRingbufferCreate(inBufferSize * (inBitDepth / 8), RINGBUF_TYPE_BYTEBUF);
-	if (mBuffer == nullptr)
-	{
-		std::printf("Unable to create ring buffer\n");
-		return false;
-	}
 	
 	//	Create the channel and set the DMA buffer as large as it can be…
 
 	i2s_slot_mode_t slotMode = inMono ? I2S_SLOT_MODE_MONO : I2S_SLOT_MODE_STEREO;
     i2s_chan_config_t chanConfig = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
-	chanConfig.dma_frame_num = 4092 / (slotMode * inBitDepth / 8);
+	chanConfig.dma_frame_num = 4092 / (int(slotMode) * int(inBitDepth) / 8);
 	
 	esp_err_t err = ::i2s_new_channel(&chanConfig, NULL, &mChannel);
 	if (err != ESP_OK)
@@ -45,7 +58,31 @@ PDMIn::start(uint32_t inSampleRate, i2s_data_bit_width_t inBitDepth, bool inMono
 		std::printf("i2s_new_channel() failed with %d: %s\n", err, esp_err_to_name(err));
 		return false;
 	}
-
+// 	if (esp_ptr_internal(this))
+// 	{
+// 		std::printf("this is internal\n");
+// 	}
+// 	else
+// 	{
+// 		std::printf("this is external\n");
+// 	}
+// 	if (esp_ptr_internal(&mChannel))
+// 	{
+// 		std::printf("&mChannel is internal\n");
+// 	}
+// 	else
+// 	{
+// 		std::printf("&mChannel is external\n");
+// 	}
+// 	if (esp_ptr_internal(mChannel))
+// 	{
+// 		std::printf("mChannel is internal\n");
+// 	}
+// 	else
+// 	{
+// 		std::printf("mChannel is external\n");
+// 	}
+	
 	//	Configure it…
 
     i2s_pdm_rx_config_t config =
@@ -86,7 +123,17 @@ PDMIn::start(uint32_t inSampleRate, i2s_data_bit_width_t inBitDepth, bool inMono
 		std::printf("i2s_channel_register_event_callback failed with %d: %s\n", err, esp_err_to_name(err));
 		return false;
 	}
-
+	
+	//	Allocate the ring buffer…
+	
+	std::printf("Allocating %zu byte ring buffer\n", inBufferSize * (inBitDepth / 8));
+	mBuffer = ::xRingbufferCreate(inBufferSize * (inBitDepth / 8), RINGBUF_TYPE_BYTEBUF);
+	if (mBuffer == nullptr)
+	{
+		std::printf("Unable to create ring buffer\n");
+		return false;
+	}
+	
 	//	Enable the channel (this starts DMA)…
 
 	err = ::i2s_channel_enable(mChannel);
@@ -104,13 +151,15 @@ PDMIn::stop()
 {
 	::i2s_channel_disable(mChannel);
 	::i2s_del_channel(mChannel);
+	::vRingbufferDelete(mBuffer);
+	mBuffer = nullptr;
 }
 
 bool
 IRAM_ATTR
 PDMIn::callback(i2s_event_data_t* inEvent)
 {
-	std::printf("Audio callback\n");
+// 	std::printf("Audio callback\n");
 	const uint8_t* buffer = static_cast<const uint8_t*>(inEvent->dma_buf);
 	(void) ::xRingbufferSendFromISR(mBuffer, buffer, inEvent->size, NULL);
 
@@ -137,6 +186,12 @@ PDMIn::samplesAvailable() const
 void*
 PDMIn::getSamples(size_t& outCount, size_t inMaxCount, uint32_t inTimeout)
 {
+	if (mBuffer == nullptr)
+	{
+		outCount = 0;
+		return nullptr;
+	}
+	
 	size_t maxBytesToRead = inMaxCount * (mBitDepth / 8);
 	size_t bytesRead = 0;
 	void* bytes = ::xRingbufferReceiveUpTo(mBuffer, &bytesRead, pdMS_TO_TICKS(inTimeout), maxBytesToRead);
@@ -145,7 +200,7 @@ PDMIn::getSamples(size_t& outCount, size_t inMaxCount, uint32_t inTimeout)
 	//	Because `xRingbufferReceiveUpTo` returns nothing if it times out (annoyingly),
 	//	make another call for whatever’s available…
 	
-	if (bytes == NULL)
+	if (bytes == nullptr)
 	{
 		unsigned int bytesAvailable = 0;
 		bytesRead = 0;
