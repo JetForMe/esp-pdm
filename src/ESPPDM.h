@@ -44,10 +44,10 @@ public:
 	void			deleteBytes(void* inBytes);
 
 
-	void* operator new(size_t size);
-	
-	void operator delete(void* ptr);
-	
+// 	void* operator new(size_t size);
+// 	
+// 	void operator delete(void* ptr);
+// 	
 protected:
 	virtual bool	callback(i2s_event_data_t* inEvent);
 	
