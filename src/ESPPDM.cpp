@@ -14,11 +14,11 @@ static const char* TAG = "ESPPDM";
 #if false
   void* PDMIn::operator new(size_t size) {
     // Request memory that is internal and accessible as 8-bit
-      ESP_LOGI(TAG, "Allocating new PDMIn\n");
+      ESP_LOGI(TAG, "Allocating new PDMIn");
     void* ptr = heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!ptr) {
       // Optionally handle allocation failure
-      ESP_LOGI(TAG, "Allocation failed in internal RAM\n");
+      ESP_LOGI(TAG, "Allocation failed in internal RAM");
     }
     return ptr;
   }
@@ -55,32 +55,32 @@ PDMIn::start(uint32_t inSampleRate, i2s_data_bit_width_t inBitDepth, bool inMono
 	esp_err_t err = ::i2s_new_channel(&chanConfig, NULL, &mChannel);
 	if (err != ESP_OK)
 	{
-		ESP_LOGI(TAG, "i2s_new_channel() failed with %d: %s\n", err, esp_err_to_name(err));
+		ESP_LOGI(TAG, "i2s_new_channel() failed with %d: %s", err, esp_err_to_name(err));
 		return false;
 	}
 // 	if (esp_ptr_internal(this))
 // 	{
-// 		ESP_LOGI(TAG, "this is internal\n");
+// 		ESP_LOGI(TAG, "this is internal");
 // 	}
 // 	else
 // 	{
-// 		ESP_LOGI(TAG, "this is external\n");
+// 		ESP_LOGI(TAG, "this is external");
 // 	}
 // 	if (esp_ptr_internal(&mChannel))
 // 	{
-// 		ESP_LOGI(TAG, "&mChannel is internal\n");
+// 		ESP_LOGI(TAG, "&mChannel is internal");
 // 	}
 // 	else
 // 	{
-// 		ESP_LOGI(TAG, "&mChannel is external\n");
+// 		ESP_LOGI(TAG, "&mChannel is external");
 // 	}
 // 	if (esp_ptr_internal(mChannel))
 // 	{
-// 		ESP_LOGI(TAG, "mChannel is internal\n");
+// 		ESP_LOGI(TAG, "mChannel is internal");
 // 	}
 // 	else
 // 	{
-// 		ESP_LOGI(TAG, "mChannel is external\n");
+// 		ESP_LOGI(TAG, "mChannel is external");
 // 	}
 	
 	//	Configure it…
@@ -103,7 +103,7 @@ PDMIn::start(uint32_t inSampleRate, i2s_data_bit_width_t inBitDepth, bool inMono
     err = ::i2s_channel_init_pdm_rx_mode(mChannel, &config);
 	if (err != ESP_OK)
 	{
-		ESP_LOGI(TAG, "i2s_channel_init_pdm_rx_mode() failed with %d: %s\n", err, esp_err_to_name(err));
+		ESP_LOGI(TAG, "i2s_channel_init_pdm_rx_mode() failed with %d: %s", err, esp_err_to_name(err));
 		return false;
 	}
 
@@ -120,17 +120,17 @@ PDMIn::start(uint32_t inSampleRate, i2s_data_bit_width_t inBitDepth, bool inMono
 	err = ::i2s_channel_register_event_callback(mChannel, &cbs, this);
 	if (err != ESP_OK)
 	{
-		ESP_LOGI(TAG, "i2s_channel_register_event_callback failed with %d: %s\n", err, esp_err_to_name(err));
+		ESP_LOGI(TAG, "i2s_channel_register_event_callback failed with %d: %s", err, esp_err_to_name(err));
 		return false;
 	}
 	
 	//	Allocate the ring buffer…
 	
-	ESP_LOGI(TAG, "Allocating %zu byte ring buffer\n", inBufferSize * (inBitDepth / 8));
+	ESP_LOGI(TAG, "Allocating %zu byte ring buffer", inBufferSize * (inBitDepth / 8));
 	mBuffer = ::xRingbufferCreate(inBufferSize * (inBitDepth / 8), RINGBUF_TYPE_BYTEBUF);
 	if (mBuffer == nullptr)
 	{
-		ESP_LOGI(TAG, "Unable to create ring buffer\n");
+		ESP_LOGI(TAG, "Unable to create ring buffer");
 		return false;
 	}
 	
@@ -139,7 +139,7 @@ PDMIn::start(uint32_t inSampleRate, i2s_data_bit_width_t inBitDepth, bool inMono
 	err = ::i2s_channel_enable(mChannel);
 	if (err != ESP_OK)
 	{
-		ESP_LOGI(TAG, "i2s_channel_enable() failed with %d: %s\n", err, esp_err_to_name(err));
+		ESP_LOGI(TAG, "i2s_channel_enable() failed with %d: %s", err, esp_err_to_name(err));
 		return false;
 	}
 
@@ -159,7 +159,7 @@ bool
 IRAM_ATTR
 PDMIn::callback(i2s_event_data_t* inEvent)
 {
-// 	ESP_LOGI(TAG, "Audio callback\n");
+// 	ESP_LOGI(TAG, "Audio callback");
 	const uint8_t* buffer = static_cast<const uint8_t*>(inEvent->dma_buf);
 	(void) ::xRingbufferSendFromISR(mBuffer, buffer, inEvent->size, NULL);
 
